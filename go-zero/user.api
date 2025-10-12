@@ -1,0 +1,32 @@
+syntax = "v1"
+
+info (
+	title:   "User Service API"
+	desc:    "用户服务接口定义"
+	author:  "sinsoledad"
+	version: "1.0"
+)
+
+type (
+	LoginReq {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	LoginResp {
+		Token string `json:"token"`
+	}
+	ProfileResp {
+		Id       int64  `json:"id"`
+		Username string `json:"username"`
+		Email    string `json:"email"`
+	}
+)
+
+service user-api {
+	@handler Login
+	post /api/user/login (LoginReq) returns (LoginResp)
+
+	@handler GetProfile
+	get /api/user/profile returns (ProfileResp)
+}
+
