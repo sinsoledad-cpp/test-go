@@ -14,7 +14,7 @@ func EsConnect() {
 	client, err := elastic.NewClient(
 		elastic.SetURL("http://127.0.0.1:9200"),
 		elastic.SetSniff(false),
-		elastic.SetBasicAuth("elastic", "xxxxxx"),
+		elastic.SetBasicAuth("", ""),
 	)
 	if err != nil {
 		fmt.Println(err)
@@ -33,8 +33,8 @@ func main() {
 
 	//docs.DocDelete()
 	//docs.DocDeleteBatch()
-	//docs.DocCreateBatch()
-	//docs.DocFind()
+	DocCreateBatch()
+	DocFind()
 	//docs.DocUpdate()
 
 	select {}

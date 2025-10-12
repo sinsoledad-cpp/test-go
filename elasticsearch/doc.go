@@ -69,7 +69,7 @@ func DocCreateBatch() {
 		fmt.Println(err)
 		return
 	}
-	fmt.Println(res.Succeeded())
+	fmt.Println("创建:=", res.Succeeded())
 }
 
 func DocDeleteBatch() {
