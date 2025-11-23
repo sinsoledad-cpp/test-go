@@ -1,0 +1,74 @@
+name: eino
+services:
+  etcd: # Etcd 是 Milvus 用作元数据存储和服务协调的组件
+    container_name: milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.18
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision # 自动压缩模式按版本号
+      - ETCD_AUTO_COMPACTION_RETENTION=1000 # 保留最近 1000 个版本，旧版本数据会被清理，防止数据库无限增长
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296 # (4GB): 设置后端数据库的最大存储配额。
+      - ETCD_SNAPSHOT_COUNT=50000 # 设置多少次提交后进行快照。
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/etcd:/etcd # 将宿主机上的数据目录（默认为当前目录下的 volumes/etcd）挂载到容器内的 /etcd 目录，确保 Etcd 数据不会随容器删除而丢失。
+    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  minio: # MinIO 是 Milvus 用作对象存储的组件，用于存储向量数据、索引文件等大块数据。
+    container_name: milvus-minio
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    environment:
+      MINIO_ACCESS_KEY: minioadmin # 认证信息：设置 MinIO 的访问密钥和私钥，这是 Milvus 连接 MinIO 所需的凭证。
+      MINIO_SECRET_KEY: minioadmin
+    ports:
+      - "9001:9001" # MinIO 控制台/Web UI 端口
+      - "9000:9000" # MinIO API 端口，供 Milvus 使用
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  standalone: # Milvus 单机版服务
+    container_name: milvus-standalone
+    image: milvusdb/milvus:v2.5.10
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined # 安全配置：禁用 seccomp 限制。这在某些 Linux 环境或使用特定存储/网络功能时可能是必要的，但通常会增加安全风险
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s # 意味着在启动的最初 90 秒内，即使健康检查失败也不会计入失败次数，给予 Milvus 充足的启动时间。
+      timeout: 20s
+      retries: 3
+    ports:
+      - "19530:19530" # Milvus 客户端 SDK 访问的默认端口
+      - "9091:9091" # Prometheus 监控/健康检查端口。
+    depends_on:
+      - "etcd"
+      - "minio"
+  # 这是新增的 Attu 服务哦！
+  attu: # Milvus 的Web 可视化管理界面
+    container_name: milvus-attu
+    image: zilliz/attu:v2.5
+    ports:
+      - "8000:3000" # 把本地的 8000 端口映射到容器的 3000 端口 (Attu 默认端口)
+    environment:
+      # MILVUS_URL 指向 Docker 网络里的 Milvus standalone 服务
+      MILVUS_URL: standalone:19530
+    depends_on:
+      - standalone # 确保 Milvus 启动后再启动 Attu
+networks:
+  default:
+    name: milvus

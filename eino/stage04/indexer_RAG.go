@@ -1,4 +1,4 @@
-package main
+package stage4
 
 import (
 	"context"
@@ -9,24 +9,8 @@ import (
 	"github.com/cloudwego/eino-ext/components/embedding/ark"
 	"github.com/cloudwego/eino-ext/components/indexer/milvus"
 	"github.com/cloudwego/eino/schema"
-	"github.com/joho/godotenv"
-	cli "github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 )
-
-var MilvusCli cli.Client
-
-func InitClient() {
-	//初始化客户端
-	ctx := context.Background()
-	client, err := cli.NewClient(ctx, cli.Config{
-		Address: "localhost:19530",
-	})
-	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
-	}
-	MilvusCli = client
-}
 
 var collection = "AwesomeEino"
 
@@ -59,12 +43,7 @@ var fields = []*entity.Field{
 	},
 }
 
-func main() {
-	err := godotenv.Load("./.env") // 加载环境变量
-	if err != nil {
-		log.Fatal("Error loading .env file") // 处理加载错误
-	}
-	InitClient()
+func IndexerRAG(docs []*schema.Document) {
 	ctx := context.Background()
 	// 初始化嵌入器
 	timeout := 30 * time.Second
@@ -86,23 +65,37 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create indexer: %v", err)
 	}
-
-	docs := []*schema.Document{
-		{
-			ID:      "1",
-			Content: "你说得对。但是原神是一款二次元开放大世界游戏",
-			MetaData: map[string]any{
-				"author": "木乔",
+	for _, doc := range docs {
+		storeDoc := []*schema.Document{
+			{
+				ID:       doc.ID,
+				Content:  doc.Content,
+				MetaData: doc.MetaData,
 			},
-		},
+		}
+		ids, err := indexer.Store(ctx, storeDoc)
+		if err != nil {
+			log.Fatalf("Failed to store documents: %v", err)
+		}
+		println("Stored documents with IDs: %v", ids)
 	}
+}
 
-	ids, err := indexer.Store(ctx, docs)
-	if err != nil {
-		log.Panicf("Failed to store documents: %v", err)
-
+func floatDocumentConverter(ctx context.Context, docs []*schema.Document, vectors [][]float64) ([]interface{}, error) {
+	rows := make([]interface{}, 0, len(docs))
+	for i, doc := range docs {
+		// float64 -> float32
+		float32Vec := make([]float32, len(vectors[i]))
+		for j, v := range vectors[i] {
+			float32Vec[j] = float32(v)
+		}
+		row := map[string]interface{}{
+			"id":       doc.ID,
+			"content":  doc.Content,
+			"vector":   float32Vec,
+			"metadata": doc.MetaData,
+		}
+		rows = append(rows, row)
 	}
-
-	log.Printf("Stored documents with IDs: %v", ids)
-
+	return rows, nil
 }
