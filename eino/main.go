@@ -2,107 +2,40 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
-	"os"
 	"time"
 
-	"github.com/cloudwego/eino-ext/components/embedding/ark"
-	"github.com/cloudwego/eino-ext/components/indexer/milvus"
-	"github.com/cloudwego/eino/schema"
-	"github.com/joho/godotenv"
-	cli "github.com/milvus-io/milvus-sdk-go/v2/client"
-	"github.com/milvus-io/milvus-sdk-go/v2/entity"
+	"github.com/cloudwego/eino-ext/components/tool/browseruse"
 )
 
-var MilvusCli cli.Client
-
-func InitClient() {
-	//初始化客户端
-	ctx := context.Background()
-	client, err := cli.NewClient(ctx, cli.Config{
-		Address: "localhost:19530",
-	})
-	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
-	}
-	MilvusCli = client
-}
-
-var collection = "AwesomeEino"
-
-var fields = []*entity.Field{
-	{
-		Name:     "id",
-		DataType: entity.FieldTypeVarChar,
-		TypeParams: map[string]string{
-			"max_length": "255",
-		},
-		PrimaryKey: true,
-	},
-	{
-		Name:     "vector", // 确保字段名匹配
-		DataType: entity.FieldTypeBinaryVector,
-		TypeParams: map[string]string{
-			"dim": "81920",
-		},
-	},
-	{
-		Name:     "content",
-		DataType: entity.FieldTypeVarChar,
-		TypeParams: map[string]string{
-			"max_length": "8192",
-		},
-	},
-	{
-		Name:     "metadata",
-		DataType: entity.FieldTypeJSON,
-	},
-}
-
 func main() {
-	err := godotenv.Load("./.env") // 加载环境变量
-	if err != nil {
-		log.Fatal("Error loading .env file") // 处理加载错误
-	}
-	InitClient()
 	ctx := context.Background()
-	// 初始化嵌入器
-	timeout := 30 * time.Second
-	embedder, err := ark.NewEmbedder(ctx, &ark.EmbeddingConfig{
-		APIKey:  os.Getenv("ARK_API_KEY"),
-		Model:   os.Getenv("EMBEDDER"),
-		Timeout: &timeout,
+	// 1. 定义 Edge 浏览器的路径
+	edgePath := `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`
+	// 注意：在 Windows 字符串中使用反引号 ` 或双反斜杠 \\ 来避免转义问题。
+
+	// 2. 配置 Config 结构体
+	config := &browseruse.Config{
+		// 将 Edge 路径赋值给 ChromeInstancePath
+		ChromeInstancePath: edgePath,
+		// 建议设置为 Headless: true，除非您需要看到浏览器窗口
+		Headless: false,
+	}
+	but, err := browseruse.NewBrowserUseTool(ctx, config)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	url := "https://www.bilibili.com"
+	result, err := but.Execute(&browseruse.Param{
+		Action: browseruse.ActionGoToURL,
+		URL:    &url,
 	})
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
-
-	indexer, err := milvus.NewIndexer(ctx, &milvus.IndexerConfig{
-		Client:     MilvusCli,
-		Collection: collection,
-		Fields:     fields,
-		Embedding:  embedder,
-	})
-	if err != nil {
-		log.Fatalf("Failed to create indexer: %v", err)
-	}
-
-	docs := []*schema.Document{
-		{
-			ID:      "1",
-			Content: "你说得对。但是原神是一款二次元开放大世界游戏",
-			MetaData: map[string]any{
-				"author": "木乔",
-			},
-		},
-	}
-
-	ids, err := indexer.Store(ctx, docs)
-	if err != nil {
-		log.Panicf("Failed to store documents: %v", err)
-
-	}
-
-	log.Printf("Stored documents with IDs: %v", ids)
-
+	fmt.Println(result)
+	time.Sleep(10 * time.Second)
+	but.Cleanup()
 }
