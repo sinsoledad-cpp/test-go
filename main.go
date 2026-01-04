@@ -1,10 +1,9 @@
 package main
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
 	"github.com/mojocn/base64Captcha"
+	"net/http"
 )
 
 // 验证码存储在内存中（也可以换成 Redis）
@@ -45,7 +44,6 @@ func verifyCaptcha(c *gin.Context) {
 }
 
 func main() {
-	// 创建路由
 	r := gin.Default()
 	r.GET("/captcha", generateCaptcha)
 	r.POST("/verify", verifyCaptcha)
